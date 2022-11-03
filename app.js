@@ -10,9 +10,8 @@ import {
 import { VerifyDiscordRequest, getRandomEmoji, DiscordRequest } from './utils.js';
 import { getShuffledOptions, getResult } from './game.js';
 import {
-  CHALLENGE_COMMAND,
-  TEST_COMMAND,
   HasGuildCommands,
+  ACCURACY_COMMAND,
 } from './commands.js';
 
 // Create an express app
@@ -46,51 +45,115 @@ app.post('/interactions', async function (req, res) {
   if (type === InteractionType.APPLICATION_COMMAND) {
     const { name } = data;
 
-    // "test" guild command
-    if (name === 'test') {
+    if (name === 'accuracy' && data) {
       // Send a message into the channel where command was triggered from
+      console.log(data)
+      const accuracy = data.options.find( e => e.name === 'base_accuracy').value
+      const max_range = data.options.find( e => e.name === 'max_range' ).value
+      const current_distance = data.options.find( e => e.name === 'current_distance' ).value
+      
+      // const distanceRelativeToBaseAccuracy = distance.value
+      const range_table = [
+        [0.05, 1000],
+        [0.17, 100],
+        [0.33, 75],
+        [0.50, 50],
+        [0.67, 25],
+        [1.00, 0],
+      ];
+      
+      const distance_ratio = (current_distance / max_range);
+      let ratio_bonus_value = 0.0
+      
+      let interp_low = range_table[0][1]
+      let interp_high = -1
+      for (let i = 0; i < range_table.length; i++) {
+        if (range_table[i][0] == distance_ratio) {
+          ratio_bonus_value = range_table[i][1] / 100;
+          break;
+        }
+        
+        if (i === 0 ) {
+          if (distance_ratio < range_table[i][0]) {
+            ratio_bonus_value = range_table[0][1] / 100;
+            break;  
+          } else {
+            continue;
+          }
+          
+        } else if ( range_table[i-1][0] < distance_ratio && range_table[i][0] > distance_ratio ) {
+          interp_low = range_table[i-1];
+          interp_high = range_table[i];
+          break;
+        } else if ( i === range_table.length - 1) {
+          ratio_bonus_value = range_table[i][1] / 100;
+          break;
+        } 
+      }
+      
+      if (interp_high !== -1) {
+        const diff = (distance_ratio - interp_low[0]) / (interp_high[0] - interp_low[0])
+        const bonus = (interp_low[1] - interp_high[1]) * (1 - diff)
+        ratio_bonus_value = (interp_high[1] + bonus) / 100
+      }
+      
+      const final_accuracy = accuracy + (ratio_bonus_value * accuracy);
+      
+      let distanceScale = final_accuracy
+      
+      const prettyAccuracy = parseFloat(accuracy * 100).toFixed(2);
+      const prettyRange = parseInt(max_range);
+      const prettyCurrentDistance = parseInt(current_distance)
+      const prettyCalculatedHitChance = distanceScale.toFixed(2) * 100
+      
+      let color = 0xff0000; // red
+      if ( distanceScale >= 0.8) {
+        color = 0x00ffff // cyan
+      } else if ( distanceScale >= 0.6 ) {
+        color = 0x00ff00 // green
+      } else if ( distanceScale >= 0.5 ) {
+        color = 0xffff00 // yellow
+      } else if ( distanceScale >= 0.35 ) {
+        color = 0xffa500 // orange
+      }
+      
       return res.send({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
           // Fetches a random emoji to send from a helper function
-          content: 'hello world ' + getRandomEmoji(),
+          embeds: [{
+            "title": "Hit Probability",
+            "color": color,
+            "fields": [
+              {
+                "name": "Accuracy",
+                "value": prettyAccuracy + "%",
+                "inline": true
+              },
+              {
+                "name": "Max Range",
+                "value": prettyRange + "m",
+                "inline": true
+              },
+              {
+                "name": "Firing Distance",
+                "value": prettyCurrentDistance + "m",
+                "inline": true
+              },
+              {
+                "name": "-------",
+                "value": "-"
+              },
+              {
+                "name": "Hit Probability",
+                "value": prettyCalculatedHitChance + "%"
+              }
+            ]
+          }]
         },
       });
     }
-    // "challenge" guild command
-    if (name === 'challenge' && id) {
-      const userId = req.body.member.user.id;
-      // User's object choice
-      const objectName = req.body.data.options[0].value;
 
-      // Create active game using message ID as the game ID
-      activeGames[id] = {
-        id: userId,
-        objectName,
-      };
-
-      return res.send({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          // Fetches a random emoji to send from a helper function
-          content: `Rock papers scissors challenge from <@${userId}>`,
-          components: [
-            {
-              type: MessageComponentTypes.ACTION_ROW,
-              components: [
-                {
-                  type: MessageComponentTypes.BUTTON,
-                  // Append the game ID to use later on
-                  custom_id: `accept_button_${req.body.id}`,
-                  label: 'Accept',
-                  style: ButtonStyleTypes.PRIMARY,
-                },
-              ],
-            },
-          ],
-        },
-      });
-    }
   }
 
   /**
@@ -180,7 +243,6 @@ app.listen(PORT, () => {
 
   // Check if guild commands from commands.js are installed (if not, install them)
   HasGuildCommands(process.env.APP_ID, process.env.GUILD_ID, [
-    TEST_COMMAND,
-    CHALLENGE_COMMAND,
+    ACCURACY_COMMAND
   ]);
 });

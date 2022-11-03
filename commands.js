@@ -1,5 +1,4 @@
-import { getRPSChoices } from './game.js';
-import { capitalize, DiscordRequest } from './utils.js';
+import { DiscordRequest } from './utils.js';
 
 export async function HasGuildCommands(appId, guildId, commands) {
   if (guildId === '' || appId === '') return;
@@ -43,40 +42,32 @@ export async function InstallGuildCommand(appId, guildId, command) {
   }
 }
 
-// Get the game choices from game.js
-function createCommandChoices() {
-  const choices = getRPSChoices();
-  const commandChoices = [];
-
-  for (let choice of choices) {
-    commandChoices.push({
-      name: capitalize(choice),
-      value: choice.toLowerCase(),
-    });
-  }
-
-  return commandChoices;
-}
-
-// Simple test command
-export const TEST_COMMAND = {
-  name: 'test',
-  description: 'Basic guild command',
-  type: 1,
-};
-
-// Command containing options
-export const CHALLENGE_COMMAND = {
-  name: 'challenge',
-  description: 'Challenge to a match of rock paper scissors',
+// Calculate firing accuracy
+export const ACCURACY_COMMAND = {
+  name: 'accuracy',
+  description: 'Calculate accuracy based on max range and current distance',
   options: [
     {
-      type: 3,
-      name: 'object',
-      description: 'Pick your object',
+      type: 10,
+      name: 'base_accuracy',
+      description: 'Accuracy of firing unit at max range.',
       required: true,
-      choices: createCommandChoices(),
+      min_value: 0.0,
+      max_value: 1.0
     },
-  ],
-  type: 1,
+    {
+      type: 4,
+      name: 'max_range',
+      description: 'Max range of firing unit.',
+      required: true,
+      min_value: 0.0,
+    },
+    {
+      type: 4,
+      name: 'current_distance',
+      description: 'Current distance of firing unit from target.',
+      required: true,
+      min_value: 0.0,
+    }
+  ]
 };
